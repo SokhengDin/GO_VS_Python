@@ -153,6 +153,9 @@ metrics_history = {
     "cpu": [],
     "memory": [],
     "requests": 0,
+    "request_count_history": [],
+    "last_request_time": time.time(),
+    "requests_per_sec": 0.0,
     "response_times": [],
 }
 
@@ -184,6 +187,7 @@ async def get_dashboard():
                     <p>CPU Usage: <span id="cpu-usage">-</span>%</p>
                     <p>Memory Usage: <span id="memory-usage">-</span> MB</p>
                     <p>Requests Processed: <span id="requests-processed">-</span></p>
+                    <p>Requests Per Second: <span id="requests-per-sec">-</span></p>
                     <p>Avg Response Time: <span id="avg-response-time">-</span> ms</p>
                     <div class="chart-container">
                         <canvas id="system-chart"></canvas>
@@ -194,6 +198,13 @@ async def get_dashboard():
                     <h2>Response Time</h2>
                     <div class="chart-container">
                         <canvas id="response-chart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="metric-card">
+                    <h2>Requests Per Second</h2>
+                    <div class="chart-container">
+                        <canvas id="rps-chart"></canvas>
                     </div>
                 </div>
             </div>
@@ -260,6 +271,32 @@ async def get_dashboard():
                 }
             });
             
+            const rpsCtx = document.getElementById('rps-chart').getContext('2d');
+            const rpsChart = new Chart(rpsCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Requests Per Second',
+                            data: [],
+                            borderColor: 'rgba(255, 159, 64, 1)',
+                            tension: 0.1,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+            
             // Fetch data every second
             function updateCharts() {
                 fetch('/api/metrics/')
@@ -268,11 +305,10 @@ async def get_dashboard():
                         // Update display values
                         document.getElementById('cpu-usage').textContent = data.cpu.toFixed(1);
                         document.getElementById('memory-usage').textContent = data.memory.toFixed(1);
-                        document.getElementById('requests-processed').textContent = data.requests;
+                        document.getElementById('requests-processed').textContent = data.total_requests;
+                        document.getElementById('requests-per-sec').textContent = data.requests_per_sec.toFixed(2);
                         document.getElementById('avg-response-time').textContent = 
-                            data.response_times.length ? 
-                            (data.response_times.reduce((a, b) => a + b, 0) / data.response_times.length).toFixed(2) : 
-                            '0.00';
+                            data.avg_response_time.toFixed(2);
                         
                         // Update system chart
                         if (systemChart.data.labels.length > 20) {
@@ -302,6 +338,16 @@ async def get_dashboard():
                             );
                             responseChart.update();
                         }
+                        
+                        // Update requests per second chart
+                        if (rpsChart.data.labels.length > 20) {
+                            rpsChart.data.labels.shift();
+                            rpsChart.data.datasets[0].data.shift();
+                        }
+                        
+                        rpsChart.data.labels.push(timeString);
+                        rpsChart.data.datasets[0].data.push(data.requests_per_sec);
+                        rpsChart.update();
                     })
                     .catch(error => console.error('Error fetching metrics:', error));
             }
@@ -322,6 +368,24 @@ async def get_metrics():
     memory_info = psutil.virtual_memory()
     memory_mb = memory_info.used / (1024 * 1024)
     
+    # Calculate requests per second
+    current_time = time.time()
+    time_diff = current_time - metrics_history["last_request_time"]
+    
+    if time_diff >= 1.0:  # Update once per second
+        # Store the current count for history
+        metrics_history["request_count_history"].append(metrics_history["requests"])
+        if len(metrics_history["request_count_history"]) > 60:  # Keep only last minute
+            metrics_history["request_count_history"].pop(0)
+            
+        # Calculate requests per second if we have at least 2 data points
+        if len(metrics_history["request_count_history"]) >= 2:
+            last_count = metrics_history["request_count_history"][-2]
+            current_count = metrics_history["request_count_history"][-1]
+            metrics_history["requests_per_sec"] = (current_count - last_count) / time_diff
+            
+        metrics_history["last_request_time"] = current_time
+    
     # Update metrics history
     if len(metrics_history["timestamps"]) > 60:  # Keep only last minute
         metrics_history["timestamps"].pop(0)
@@ -336,7 +400,9 @@ async def get_metrics():
     return {
         "cpu": cpu_percent,
         "memory": memory_mb,
-        "requests": metrics_history["requests"],
+        "total_requests": metrics_history["requests"],
+        "requests_per_sec": metrics_history["requests_per_sec"],
+        "avg_response_time": sum(metrics_history["response_times"]) / len(metrics_history["response_times"]) if metrics_history["response_times"] else 0,
         "response_times": metrics_history["response_times"][-50:] if metrics_history["response_times"] else []
     }
 

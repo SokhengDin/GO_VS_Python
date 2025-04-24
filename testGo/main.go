@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"runtime"
 	"strconv"
+	"sync"
 	"syscall"
 	"testGO/custom_handler"
 	"testGO/generated"
@@ -144,6 +145,105 @@ type UserResponse struct {
 	Pets      []PetResponse `json:"pets"`
 }
 
+// MetricsCollector tracks request metrics
+type MetricsCollector struct {
+	mu               sync.Mutex
+	requestCount     int64
+	startTime        time.Time
+	requestsPerSec   float64
+	responseTimes    []float64
+	lastCalculation  time.Time
+	lastRequestCount int64
+}
+
+// NewMetricsCollector creates a new metrics collector
+func NewMetricsCollector() *MetricsCollector {
+	collector := &MetricsCollector{
+		startTime:       time.Now(),
+		lastCalculation: time.Now(),
+		responseTimes:   make([]float64, 0, 1000),
+	}
+
+	// Start a goroutine to calculate requests per second every second
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			collector.calculateRequestsPerSecond()
+		}
+	}()
+
+	return collector
+}
+
+// IncrementRequestCount increments the request counter
+func (m *MetricsCollector) IncrementRequestCount() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.requestCount++
+}
+
+// AddResponseTime adds a response time to the collector
+func (m *MetricsCollector) AddResponseTime(duration time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Convert to milliseconds
+	ms := float64(duration.Microseconds()) / 1000.0
+
+	m.responseTimes = append(m.responseTimes, ms)
+	// Keep only the last 1000 response times
+	if len(m.responseTimes) > 1000 {
+		m.responseTimes = m.responseTimes[1:]
+	}
+}
+
+// calculateRequestsPerSecond calculates the current requests per second
+func (m *MetricsCollector) calculateRequestsPerSecond() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	now := time.Now()
+	duration := now.Sub(m.lastCalculation).Seconds()
+
+	if duration > 0 {
+		requestDiff := m.requestCount - m.lastRequestCount
+		m.requestsPerSec = float64(requestDiff) / duration
+		m.lastCalculation = now
+		m.lastRequestCount = m.requestCount
+	}
+}
+
+// GetMetrics returns the current metrics
+func (m *MetricsCollector) GetMetrics() map[string]interface{} {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var avgResponseTime float64
+	if len(m.responseTimes) > 0 {
+		total := 0.0
+		for _, t := range m.responseTimes {
+			total += t
+		}
+		avgResponseTime = total / float64(len(m.responseTimes))
+	}
+
+	// Return last 50 response times at most
+	responseTimes := m.responseTimes
+	if len(responseTimes) > 50 {
+		responseTimes = responseTimes[len(responseTimes)-50:]
+	}
+
+	return map[string]interface{}{
+		"total_requests":    m.requestCount,
+		"requests_per_sec":  m.requestsPerSec,
+		"avg_response_time": avgResponseTime,
+		"uptime_seconds":    time.Since(m.startTime).Seconds(),
+		"response_times":    responseTimes,
+	}
+}
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -174,11 +274,40 @@ func main() {
 		StreamRequestBody:     true,
 	})
 
+	// Create metrics collector
+	metrics := NewMetricsCollector()
+
+	// Add middleware for metrics collection
+	app.Use(func(c *fiber.Ctx) error {
+		start := time.Now()
+
+		// Process request
+		err := c.Next()
+
+		// Don't track metrics requests themselves
+		path := c.Path()
+		if path != "/api/metrics" && path != "/metrics" {
+			// Increment request counter
+			metrics.IncrementRequestCount()
+
+			// Record response time
+			duration := time.Since(start)
+			metrics.AddResponseTime(duration)
+		}
+
+		return err
+	})
+
 	app.Use(recover.New())
 	app.Use(logger.New())
 
-	// Add monitor dashboard explicitly as a route handler (not middleware)
+	// Add monitor dashboard
 	app.Get("/metrics", monitor.New())
+
+	// Add metrics endpoint
+	app.Get("/api/metrics", func(c *fiber.Ctx) error {
+		return c.JSON(metrics.GetMetrics())
+	})
 
 	// Create an API router with /api/v1 prefix
 	api := app.Group("/api/v1")

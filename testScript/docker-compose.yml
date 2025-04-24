@@ -6,7 +6,7 @@ services:
     volumes:
       - ./benchmark.js:/scripts/benchmark.js
     environment:
-      API_URL: http://host.docker.internal:8000
+      API_URL: http://217.15.161.155:8088
     network_mode: "host"
     deploy:
       resources:
@@ -20,7 +20,7 @@ services:
     volumes:
       - ./benchmark.js:/scripts/benchmark.js
     environment:
-      API_URL: http://host.docker.internal:8080
+      API_URL: http://217.15.161.155:8080
     network_mode: "host"
     deploy:
       resources:

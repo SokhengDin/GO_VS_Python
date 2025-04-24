@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  k6-fastapi:
+    image: grafana/k6
+    volumes:
+      - ./benchmark.js:/scripts/benchmark.js
+    environment:
+      API_URL: http://host.docker.internal:8000
+    network_mode: "host"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+    command: run /scripts/benchmark.js
+
+  k6-gofiber:
+    image: grafana/k6
+    volumes:
+      - ./benchmark.js:/scripts/benchmark.js
+    environment:
+      API_URL: http://host.docker.internal:8080
+    network_mode: "host"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+    command: run /scripts/benchmark.js

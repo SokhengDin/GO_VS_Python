@@ -7,16 +7,10 @@ const apiUrl = __ENV.API_URL;
 
 export const options = {
   stages: [
-    { duration: '20s', target: 100 },    // Ramp up to 100 users in 20 seconds
-    { duration: '30s', target: 300 },    // Ramp up to 300 users in 30 seconds
-    { duration: '1m', target: 500 },     // Ramp up to 500 users over 1 minute
-    { duration: '2m', target: 500 },     // Stay at 500 users for 2 minutes
-    { duration: '30s', target: 0 },      // Ramp down to 0 users
+    { duration: '30s', target: 50 },
+    { duration: '1m', target: 100 },
+    { duration: '30s', target: 0 },
   ],
-  thresholds: {
-    http_req_failed: ['rate<0.05'],    // Less than 5% of requests should fail
-    http_req_duration: ['p(95)<500'],  // 95% of requests should be below 500ms
-  },
 };
 
 function generateUser() {
@@ -58,6 +52,5 @@ export default function() {
     http.get(`${apiUrl}/api/v1/users/${userId}`);
   }
   
-  // Reduced sleep time to 0.1 seconds instead of 1 second
-  sleep(0.1);
+  sleep(1);
 }

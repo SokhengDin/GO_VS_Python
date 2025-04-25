@@ -8,7 +8,7 @@ services:
       - POSTGRES_DB=test
     restart: unless-stopped
     volumes:
-      - database_bench:/var/lib/postgresql/data
+      - database_go_db:/var/lib/postgresql/data
     networks:
       - bench_network
 
@@ -21,7 +21,7 @@ services:
       - POSTGRES_DB=test
     restart: unless-stopped
     volumes:
-      - database_bench:/var/lib/postgresql/data
+      - database_python_db:/var/lib/postgresql/data
     networks:
       - bench_network
       
@@ -66,7 +66,8 @@ services:
       - bench_network
 
 volumes:
-  database_bench:
+  database_go_db:
+  database_python_db:
 
 networks:
   bench_network:

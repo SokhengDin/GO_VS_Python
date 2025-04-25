@@ -82,7 +82,7 @@ func DatabaseSession() (DataStore, error) {
 		dbDialect, user, host, port, dbname)
 
 	dsn := fmt.Sprintf(
-		"%s://%s:%s@%s:%d/%s",
+		"%s://%s:%s@%s:%d/%s?sslmode=disable",
 		dbDialect,
 		user,
 		password,

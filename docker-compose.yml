@@ -1,14 +1,25 @@
 services:
-  bench_db:
+  go_db:
     image: postgres:17-alpine
-    container_name: bench_db
+    container_name: go_db
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=CDC123
       - POSTGRES_DB=test
     restart: unless-stopped
-    ports:
-      - "5439:5432"
+    volumes:
+      - database_bench:/var/lib/postgresql/data
+    networks:
+      - bench_network
+
+  python_db:
+    image: postgres:17-alpine
+    container_name: python_db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=CDC123
+      - POSTGRES_DB=test
+    restart: unless-stopped
     volumes:
       - database_bench:/var/lib/postgresql/data
     networks:
@@ -23,9 +34,9 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - bench_db
+      - go_db
     environment:
-      - DB_HOST=bench_db
+      - DB_HOST=go_db
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASS=CDC123
@@ -43,9 +54,9 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - bench_db
+      - python_db
     environment:
-      - DB_HOST=bench_db
+      - DB_HOST=python_db
       - DB_PORT=5432
       - DB_USER=postgres
       - DB_PASS=CDC123

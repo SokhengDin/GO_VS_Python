@@ -52,7 +52,7 @@ services:
     container_name: python_app
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8088:8000"
     depends_on:
       - python_db
     environment:

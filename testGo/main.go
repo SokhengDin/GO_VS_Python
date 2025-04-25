@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"testGO/custom_handler"
 	"testGO/generated"
+	"testGO/generated/migrate"
 	"testGO/generated/users"
 	"time"
 
@@ -256,10 +257,17 @@ func main() {
 
 	client := store.GetClient()
 
-	// Create schema if not exists
-	if err := client.Schema.Create(ctx); err != nil {
+	// Run database migrations with additional options
+	log.Println("Running database migrations...")
+	if err := client.Schema.Create(
+		ctx,
+		migrate.WithDropIndex(true),
+		migrate.WithDropColumn(true),
+		migrate.WithForeignKeys(true),
+	); err != nil {
 		log.Fatalf("Failed creating schema resources: %v", err)
 	}
+	log.Println("Database migrations completed successfully")
 
 	app := fiber.New(fiber.Config{
 		AppName:               "Go Fiber API Benchmark",
